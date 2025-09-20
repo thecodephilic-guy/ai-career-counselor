@@ -1,36 +1,132 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Career Counselor
 
-## Getting Started
+A beautiful, modern AI-powered career counseling chat application built with React, TypeScript, and a stunning gradient-based design system.
 
-First, run the development server:
+## 🚀 Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **AI-Powered Career Guidance**: Get personalized advice on resumes, interviews, career transitions, and professional development
+- **Session Management**: Create and manage multiple chat sessions without authentication
+- **Beautiful Modern UI**: Gradient-based design with smooth animations and responsive layout
+- **Real-time Chat Experience**: Typing indicators, message bubbles, and smooth interactions
+- **Persistent Storage**: Chat history saved locally (ready for database integration)
+- **Mobile Responsive**: Works perfectly on desktop and mobile devices
+
+## 🛠️ Tech Stack
+
+- **Frontend**: React 18, TypeScript, Tailwind CSS
+- **UI Components**: shadcn/ui with custom variants
+- **Animations**: Framer Motion
+- **Database Ready**: Drizzle ORM with PostgreSQL schema (Neon.tech compatible)
+- **AI Integration**: OpenAI API ready (currently using demo responses)
+- **Session Management**: UUID-based anonymous sessions
+
+## 🎨 Design System
+
+The app features a professionally crafted design system with:
+- **Purple-blue gradient color scheme** for a modern, professional look
+- **Semantic color tokens** for consistent theming
+- **Custom component variants** for buttons, cards, and chat elements
+- **Smooth animations** and micro-interactions
+- **Glass morphism effects** and glowing elements
+
+## 📦 Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+## 🔧 Environment Setup
+
+For full functionality, set up these environment variables:
+
+```env
+# OpenAI API Key (for AI responses)
+OPENAI_API_KEY=your_openai_api_key
+
+# Database URL (for Neon.tech PostgreSQL)
+DATABASE_URL=your_neon_database_url
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🗄️ Database Schema
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The app is ready for PostgreSQL with Drizzle ORM:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **chat_sessions**: Manages chat sessions with titles and metadata
+- **messages**: Stores all messages with role (user/assistant) and timestamps
+- **Proper relations** and indexing for performance
 
-## Learn More
+To run migrations:
+```bash
+npx drizzle-kit generate:pg
+npx drizzle-kit push:pg
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 🤖 AI Integration
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Currently uses simulated AI responses for demo purposes. To integrate with real AI:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Add your OpenAI API key to environment variables
+2. Uncomment the OpenAI integration code in `src/lib/ai.ts`
+3. The system prompt is optimized for career counseling use cases
 
-## Deploy on Vercel
+## 🎯 Career Counseling Features
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The AI assistant provides guidance on:
+- Resume writing and optimization
+- Interview preparation strategies
+- Career transition planning
+- Skill development recommendations
+- Salary negotiation tactics
+- Professional networking advice
+- Leadership development
+- Work-life balance strategies
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📱 Responsive Design
+
+- **Desktop**: Full sidebar with session management and expanded chat interface
+- **Mobile**: Collapsible sidebar with optimized touch interactions
+- **Tablet**: Adaptive layout that works seamlessly across screen sizes
+
+## 🔒 Session Management
+
+- **Anonymous sessions** using UUID-based identification
+- **Local storage persistence** for chat history
+- **Multiple concurrent sessions** with easy switching
+- **Session titles** auto-generated from conversation topics
+
+## 🚀 Deployment
+
+The app is ready for deployment on:
+- **Vercel** (recommended for React apps)
+- **Netlify**
+- **Any static hosting service**
+
+For database integration, connect to:
+- **Neon.tech** (recommended PostgreSQL hosting)
+- **Supabase**
+- **PlanetScale**
+- **Railway**
+
+## 🔮 Future Enhancements
+
+- Real database integration with Drizzle ORM
+- User authentication system
+- File upload for resume analysis
+- Career assessment tools
+- Industry-specific guidance
+- Export chat transcripts
+- Advanced analytics and insights
+
+## 📄 License
+
+MIT License - feel free to use this project as a foundation for your own career counseling applications.
+
+---
+
+Built with ❤️ using modern web technologies for an exceptional user experience.

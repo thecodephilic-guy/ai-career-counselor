@@ -1,0 +1,313 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { MessageBubble } from "./MessageBubble";
+import { TypingIndicator } from "./TypingIndicator";
+import { ChatInput } from "./ChatInput";
+import { SessionSidebar } from "./SessionSidebar";
+import { ChatMessage, ChatSessionData } from "@/lib/types";
+import { SessionManager } from "@/lib/session";
+// import { generateAIResponse } from '@/lib/ai';
+import { Sparkles, Brain, Menu, SquarePen } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
+import { useIsMobile } from "@/hooks/useMobile";
+
+export function ChatInterface() {
+  const [sessions, setSessions] = useState<ChatSessionData[]>([]);
+  const [currentSession, setCurrentSession] = useState<ChatSessionData | null>(
+    null
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  
+
+  // Initialize with first session
+  useEffect(() => {
+    const sessionId = SessionManager.getSessionId();
+    const initialSession: ChatSessionData = {
+      id: uuidv4(),
+      title: "New Career Chat",
+      sessionId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true,
+      messages: [],
+    };
+
+    setSessions([initialSession]);
+    setCurrentSession(initialSession);
+    setIsInitialized(true);
+  }, []);
+
+  // Auto scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [currentSession?.messages, isLoading]);
+
+  const handleSendMessage = async (content: string) => {
+    if (!currentSession || isLoading) return;
+
+    const userMessage: ChatMessage = {
+      id: uuidv4(),
+      role: "user",
+      content,
+      timestamp: new Date(),
+    };
+
+    // Update current session with user message
+    const updatedSession = {
+      ...currentSession,
+      messages: [...currentSession.messages, userMessage],
+      updatedAt: new Date(),
+      title:
+        currentSession.messages.length === 0
+          ? generateSessionTitle(content)
+          : currentSession.title,
+    };
+
+    setCurrentSession(updatedSession);
+    setSessions((prev) =>
+      prev.map((s) => (s.id === updatedSession.id ? updatedSession : s))
+    );
+    setIsLoading(true);
+
+    try {
+      // Generate AI response
+      //   const aiContent = await generateAIResponse(
+      //     currentSession.messages.map(m => ({ role: m.role, content: m.content })),
+      //     content
+      //   );
+
+      const aiMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: "abcdefghijklmnopqrstwxyz",
+        timestamp: new Date(),
+      };
+
+      // Update session with AI response
+      const finalSession = {
+        ...updatedSession,
+        messages: [...updatedSession.messages, aiMessage],
+        updatedAt: new Date(),
+      };
+
+      setCurrentSession(finalSession);
+      setSessions((prev) =>
+        prev.map((s) => (s.id === finalSession.id ? finalSession : s))
+      );
+    } catch (error) {
+      console.error("Failed to get AI response:", error);
+      // Add error message
+      const errorMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content:
+          "I apologize, but I'm having trouble responding right now. Please try again.",
+        timestamp: new Date(),
+      };
+
+      const errorSession = {
+        ...updatedSession,
+        messages: [...updatedSession.messages, errorMessage],
+        updatedAt: new Date(),
+      };
+
+      setCurrentSession(errorSession);
+      setSessions((prev) =>
+        prev.map((s) => (s.id === errorSession.id ? errorSession : s))
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleNewSession = () => {
+    const newSessionId = SessionManager.generateNewSessionId();
+    const newSession: ChatSessionData = {
+      id: uuidv4(),
+      title: "New Career Chat",
+      sessionId: newSessionId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true,
+      messages: [],
+    };
+
+    setSessions((prev) => [newSession, ...prev]);
+    setCurrentSession(newSession);
+  };
+
+  const handleSelectSession = (sessionId: string) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (session) {
+      setCurrentSession(session);
+      SessionManager.setSessionId(session.sessionId);
+    }
+  };
+
+  const generateSessionTitle = (firstMessage: string): string => {
+    if (firstMessage.length <= 30) return firstMessage;
+
+    // Extract key topics
+    const lower = firstMessage.toLowerCase();
+    if (lower.includes("resume")) return "📄 Resume Help";
+    if (lower.includes("interview")) return "🎯 Interview Prep";
+    if (lower.includes("career change")) return "🔄 Career Transition";
+    if (lower.includes("salary")) return "💰 Salary Discussion";
+    if (lower.includes("skill")) return "🚀 Skill Development";
+    if (lower.includes("network")) return "🤝 Networking Strategy";
+
+    return firstMessage.substring(0, 30) + "...";
+  };
+
+  // Show loading state while initializing
+  if (!isInitialized || !currentSession) {
+    return (
+      <div className="h-screen flex bg-background items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className="w-16 h-16 rounded-full bg-gradient-to-r from-primary to-primary/80 mx-auto mb-4 flex items-center justify-center shadow-lg shadow-primary/25 animate-pulse">
+            <Brain className="w-8 h-8 text-primary-foreground" />
+          </div>
+          <p className="text-muted-foreground">
+            Initializing AI Career Counselor...
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen flex bg-background">
+      {/* Sidebar */}
+      <SessionSidebar
+        sessions={sessions}
+        currentSessionId={currentSession?.id || ""}
+        onSelectSession={handleSelectSession}
+        onNewSession={handleNewSession}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+      />
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <motion.header
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-background/95 backdrop-blur-md border-b border-border p-4 md:py-8 sticky top-0 z-10"
+        >
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              >
+                <Menu className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="hidden md:block">
+                <SquarePen className="w-4, h-4" />
+              </Button>
+
+              <div className="flex items-center gap-2 pl-20">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
+                  <Brain className="w-5 h-5 text-primary-foreground" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-foreground">
+                    AI Career Counselor
+                  </h1>
+                  <p className="text-sm text-muted-foreground">
+                    Your personal career development assistant
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Sparkles className="w-4 h-4" />
+              <span>Always here to help</span>
+            </div>
+          </div>
+        </motion.header>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="max-w-4xl mx-auto p-6">
+              {currentSession?.messages.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-center py-16"
+                >
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-r from-primary to-primary/80 mx-auto mb-6 flex items-center justify-center shadow-xl shadow-primary/30">
+                    <Brain className="w-10 h-10 text-primary-foreground" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-foreground mb-4">
+                    Welcome to Your AI Career Counselor
+                  </h2>
+                  <p className="text-muted-foreground text-lg mb-8 max-w-2xl mx-auto">
+                    I'm here to help guide your career journey. Ask me about
+                    resume tips, interview preparation, career transitions,
+                    skill development, or any professional challenge you're
+                    facing.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                    {[
+                      "How can I improve my resume?",
+                      "Tips for salary negotiation?",
+                      "Best way to change careers?",
+                      "How to prepare for interviews?",
+                    ].map((suggestion, idx) => (
+                      <Button
+                        key={idx}
+                        variant="outline"
+                        onClick={() => handleSendMessage(suggestion)}
+                        className="text-left p-4 h-auto bg-card/50 backdrop-blur-sm hover:bg-card hover:border-primary/30 transition-all duration-200"
+                      >
+                        {suggestion}
+                      </Button>
+                    ))}
+                  </div>
+                </motion.div>
+              ) : (
+                <AnimatePresence mode="popLayout">
+                  {currentSession?.messages.map((message, index) => (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      isLast={
+                        index === (currentSession?.messages.length || 0) - 1
+                      }
+                    />
+                  ))}
+                </AnimatePresence>
+              )}
+
+              <AnimatePresence>
+                {isLoading && <TypingIndicator />}
+              </AnimatePresence>
+
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Input */}
+        <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+      </div>
+    </div>
+  );
+}
