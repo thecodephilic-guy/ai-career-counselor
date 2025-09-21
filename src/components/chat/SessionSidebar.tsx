@@ -6,8 +6,8 @@ import { Card } from '@/components/ui/card';
 import { 
   MessageCircle, 
   Plus, 
-  ChevronLeft, 
-  ChevronRight,
+  PanelRightClose,
+  PanelLeftClose,
   Calendar,
   Clock
 } from 'lucide-react';
@@ -53,14 +53,28 @@ export function SessionSidebar({
 
   return (
     <motion.div
-      initial={{ width: isCollapsed ? 0 : 320 }}
-      animate={{ width: isCollapsed ? 0 : 320 }}
+      initial={{ width: isCollapsed ? 60 : 320 }}
+      animate={{ width: isCollapsed ? 60 : 320 }}
       transition={{ duration: 0.3 }}
-      className="h-full bg-sidebar border-r border-sidebar-border flex flex-col relative"
+      className="h-full bg-sidebar border-r border-sidebar-border flex flex-col relative w-80 md:w-auto"
     >
       {/* Header */}
-      <div className="p-4 border-b border-sidebar-border">
-        <div className="flex items-center justify-between">
+      <div className="p-4 border-sidebar-border">
+        <div className={`flex items-center ${isCollapsed && "justify-center" }`}>
+          {onToggleCollapse && (
+            <Button 
+              variant="ghost" 
+              size="lg"
+              onClick={onToggleCollapse}
+              className="p-2 space-x-2 hover:bg-sidebar-accent text-sidebar-foreground hidden md:flex"
+            >
+              {isCollapsed ? (
+                <PanelRightClose className="w-4 h-4" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4" />
+              )}
+            </Button>
+          )}
           {!isCollapsed && (
             <motion.h2
               initial={{ opacity: 0 }}
@@ -70,21 +84,6 @@ export function SessionSidebar({
             >
               Chat Sessions
             </motion.h2>
-          )}
-          
-          {onToggleCollapse && (
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={onToggleCollapse}
-              className="p-2 hover:bg-sidebar-accent text-sidebar-foreground"
-            >
-              {isCollapsed ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <ChevronLeft className="w-4 h-4" />
-              )}
-            </Button>
           )}
         </div>
         
@@ -97,7 +96,7 @@ export function SessionSidebar({
           >
             <Button 
               onClick={onNewSession}
-              className="w-full bg-gradient-to-r from-sidebar-primary to-sidebar-primary/90 hover:from-sidebar-primary/90 hover:to-sidebar-primary text-sidebar-primary-foreground hover:scale-105 transition-transform shadow-lg shadow-sidebar-primary/25"
+              className="w-full bg-gradient-to-r from-sidebar-primary to-sidebar-primary/90 hover:from-sidebar-primary/90 hover:to-sidebar-primary text-sidebar-primary-foreground hover:scale-105 transition-transform shadow-lg shadow-sidebar-primary/25 text-sm"
             >
               <Plus className="w-4 h-4 mr-2" />
               New Chat
@@ -177,8 +176,8 @@ export function SessionSidebar({
                       
                       {session.messages.length > 0 && (
                         <div className="mt-2 text-xs text-muted-foreground/80 truncate">
-                          {session.messages[session.messages.length - 1].content.substring(0, 60)}
-                          {session.messages[session.messages.length - 1].content.length > 60 && '...'}
+                          {session.messages[session.messages.length - 1].content.substring(0, 40)}
+                          {session.messages[session.messages.length - 1].content.length > 40 && '...'}
                         </div>
                       )}
                     </div>
