@@ -331,9 +331,9 @@ export function ChatInterface() {
                       Welcome to Your AI Career Counselor
                     </h2>
                     <p className="text-muted-foreground text-lg mb-8 max-w-2xl mx-auto">
-                      I'm here to support your career journey. Whether it's resume
+                      {`I'm here to support your career journey. Whether it's resume
                       tips, interview prep, career transitions, skill growth, or
-                      tackling professional challenges, feel free to ask.
+                      tackling professional challenges, feel free to ask.`}
                     </p>
                     <div className="grid grid-cols-1 gap-4 max-w-2xl mx-auto px-4">
                       {[
