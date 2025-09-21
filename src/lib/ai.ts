@@ -1,11 +1,11 @@
-import OpenAI from 'openai';
+// import OpenAI from 'openai';
 
 // Initialize OpenAI client (in a real app, this would use environment variables)
 // For demo purposes, we're using a placeholder key since we simulate AI responses
-const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY || 'demo-key-not-used',
-  dangerouslyAllowBrowser: true, // Only for demo - never do this in production!
-});
+// const openai = new OpenAI({
+  // apiKey: import.meta.env.VITE_OPENAI_API_KEY || 'demo-key-not-used',
+  // dangerouslyAllowBrowser: true, // Only for demo - never do this in production!
+// });
 
 export const CAREER_COUNSELOR_PROMPT = `You are an expert AI Career Counselor with years of experience helping professionals at all stages of their careers. Your role is to provide thoughtful, personalized career guidance and advice.
 
