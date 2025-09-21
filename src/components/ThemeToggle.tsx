@@ -4,11 +4,11 @@ import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
 function ThemeToggle() {
-  const { setTheme } = useTheme();
-  const [isDark, setIsDark] = useState(false);
+  const { setTheme, theme } = useTheme();
+  const [isDark, setIsDark] = useState(false);  
 
   const toggleTheme = () => {
-    if (isDark) {
+    if (theme === "dark") {
       setTheme("light");
       setIsDark(false);
     } else {
@@ -18,7 +18,7 @@ function ThemeToggle() {
   };
   return (
     <Button
-      variant="ghost"
+      variant="secondary"
       size="icon"
       onClick={toggleTheme}
       className="rounded-full transition-transform duration-300 hover:rotate-12"

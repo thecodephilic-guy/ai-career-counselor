@@ -11,7 +11,7 @@ import { SessionSidebar } from "./SessionSidebar";
 import { ChatMessage, ChatSessionData } from "@/lib/types";
 import { SessionManager } from "@/lib/session";
 // import { generateAIResponse } from '@/lib/ai';
-import { Sparkles, Brain, TextAlignJustify } from "lucide-react";
+import { Sparkles, Brain, Menu } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import ThemeToggle from "../ThemeToggle";
 
@@ -23,7 +23,10 @@ export function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [showMobileHeader, setShowMobileHeader] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const lastScrollTop = useRef(0);
 
   // Initialize with first session and set initial mobile state
   useEffect(() => {
@@ -57,6 +60,27 @@ export function ChatInterface() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentSession?.messages, isLoading]);
+
+  // Handle scroll for mobile header visibility
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerWidth >= 768) return; // Only on mobile
+
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const scrollingDown = scrollTop > lastScrollTop.current;
+      
+      if (scrollingDown && scrollTop > 100) {
+        setShowMobileHeader(false);
+      } else {
+        setShowMobileHeader(true);
+      }
+      
+      lastScrollTop.current = scrollTop;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleSendMessage = async (content: string) => {
     if (!currentSession || isLoading) return;
@@ -95,7 +119,7 @@ export function ChatInterface() {
       const aiMessage: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
-        content: "I’m currently offline for maintenance, but I’ll be back shortly to help you with your queries.",
+        content: "I'm currently offline for maintenance, but I'll be back shortly to help you with your queries.",
         timestamp: new Date(),
       };
 
@@ -200,14 +224,19 @@ export function ChatInterface() {
   }
 
   return (
-    <div className="h-screen flex bg-background relative">
+    <div className="h-screen flex bg-background relative overflow-hidden">
       {/* Mobile Sidebar Overlay */}
-      {isSidebarCollapsed === false && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
-          onClick={() => setIsSidebarCollapsed(true)}
-        />
-      )}
+      <AnimatePresence>
+        {!isSidebarCollapsed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
+            onClick={() => setIsSidebarCollapsed(true)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Sidebar */}
       <div
@@ -233,12 +262,16 @@ export function ChatInterface() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col w-full md:w-auto">
+      <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-background/95 backdrop-blur-md border-b border-border p-4 sticky top-0 z-10"
+          animate={{ 
+            opacity: 1, 
+            y: showMobileHeader ? 0 : -100
+          }}
+          transition={{ duration: 0.3 }}
+          className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border p-3 md:p-4 shadow-sm"
         >
           <div className="flex items-center justify-between max-w-4xl mx-auto">
             <div className="flex items-center gap-3">
@@ -248,97 +281,102 @@ export function ChatInterface() {
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                 className="md:hidden hover:bg-accent"
               >
-                <TextAlignJustify className="w-4 h-4" />
+                <Menu className="w-4 h-4" />
               </Button>
 
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
-                  <Brain className="w-5 h-5 text-primary-foreground" />
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-r from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
+                  <Brain className="w-4 h-4 md:w-5 md:h-5 text-primary-foreground" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-foreground">
+                  <h1 className="text-lg md:text-xl font-bold text-foreground">
                     AI Career Counselor
                   </h1>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs md:text-sm text-muted-foreground">
                     Your personal career assistant
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Sparkles className="hidden md:block w-4 h-4" />
-              <span className="hidden md:block">Always here to help</span>
+            <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
+                <Sparkles className="w-4 h-4" />
+                <span>Always here to help</span>
+              </div>
               <ThemeToggle />
             </div>
-
-            
           </div>
         </motion.header>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="max-w-4xl mx-auto p-4 md:p-6">
-              {currentSession?.messages.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-center py-16"
-                >
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-r from-primary to-primary/80 mx-auto mb-6 flex items-center justify-center shadow-xl shadow-primary/30">
-                    <Brain className="w-10 h-10 text-primary-foreground" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-foreground mb-4">
-                    Welcome to Your AI Career Counselor
-                  </h2>
-                  <p className="text-muted-foreground text-lg mb-8 max-w-2xl mx-auto">
-                    I’m here to support your career journey. Whether it’s resume
-                    tips, interview prep, career transitions, skill growth, or
-                    tackling professional challenges, feel free to ask.
-                  </p>
-                  <div className="grid grid-cols-1 gap-4 max-w-2xl mx-auto px-4">
-                    {[
-                      "How can I improve my resume?",
-                      "Tips for salary negotiation?",
-                      "Best way to change careers?",
-                    ].map((suggestion, idx) => (
-                      <Button
-                        key={idx}
-                        variant="outline"
-                        onClick={() => handleSendMessage(suggestion)}
-                        className="text-left p-4 h-auto bg-card/50 backdrop-blur-sm hover:bg-card hover:border-primary/30 transition-all duration-200 text-sm"
-                      >
-                        {suggestion}
-                      </Button>
+        {/* Messages Container */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Messages */}
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea 
+              ref={scrollAreaRef}
+              className="h-full"
+            >
+              <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24">
+                {currentSession?.messages.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center py-16"
+                  >
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-r from-primary to-primary/80 mx-auto mb-6 flex items-center justify-center shadow-xl shadow-primary/30">
+                      <Brain className="w-10 h-10 text-primary-foreground" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-foreground mb-4">
+                      Welcome to Your AI Career Counselor
+                    </h2>
+                    <p className="text-muted-foreground text-lg mb-8 max-w-2xl mx-auto">
+                      I'm here to support your career journey. Whether it's resume
+                      tips, interview prep, career transitions, skill growth, or
+                      tackling professional challenges, feel free to ask.
+                    </p>
+                    <div className="grid grid-cols-1 gap-4 max-w-2xl mx-auto px-4">
+                      {[
+                        "How can I improve my resume?",
+                        "Tips for salary negotiation?",
+                        "Best way to change careers?",
+                      ].map((suggestion, idx) => (
+                        <Button
+                          key={idx}
+                          variant="outline"
+                          onClick={() => handleSendMessage(suggestion)}
+                          className="text-left p-4 h-auto bg-card/50 backdrop-blur-sm hover:bg-card hover:border-primary/30 transition-all duration-200 text-sm"
+                        >
+                          {suggestion}
+                        </Button>
+                      ))}
+                    </div>
+                  </motion.div>
+                ) : (
+                  <AnimatePresence mode="popLayout">
+                    {currentSession?.messages.map((message, index) => (
+                      <MessageBubble
+                        key={message.id}
+                        message={message}
+                        isLast={
+                          index === (currentSession?.messages.length || 0) - 1
+                        }
+                      />
                     ))}
-                  </div>
-                </motion.div>
-              ) : (
-                <AnimatePresence mode="popLayout">
-                  {currentSession?.messages.map((message, index) => (
-                    <MessageBubble
-                      key={message.id}
-                      message={message}
-                      isLast={
-                        index === (currentSession?.messages.length || 0) - 1
-                      }
-                    />
-                  ))}
+                  </AnimatePresence>
+                )}
+
+                <AnimatePresence>
+                  {isLoading && <TypingIndicator />}
                 </AnimatePresence>
-              )}
 
-              <AnimatePresence>
-                {isLoading && <TypingIndicator />}
-              </AnimatePresence>
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+          </div>
 
-              <div ref={messagesEndRef} />
-            </div>
-          </ScrollArea>
+          <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
-
-        {/* Input */}
-        <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
       </div>
     </div>
   );
