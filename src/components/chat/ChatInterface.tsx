@@ -10,10 +10,12 @@ import { ChatInput } from "./ChatInput";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatMessage, ChatSessionData } from "@/lib/types";
 import { SessionManager } from "@/lib/session";
-// import { generateAIResponse } from '@/lib/ai';
 import { Sparkles, Brain, Menu } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import ThemeToggle from "../ThemeToggle";
+import { useIsMobile } from "@/hooks/useMobile";
+import { useTRPC } from "@/trpc/client";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 export function ChatInterface() {
   const [sessions, setSessions] = useState<ChatSessionData[]>([]);
@@ -27,6 +29,9 @@ export function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const lastScrollTop = useRef(0);
+  const isMobile = useIsMobile();
+  const trpc = useTRPC();
+  const sendMessage = useMutation(trpc.sendMessage.mutationOptions());
 
   // Initialize with first session and set initial mobile state
   useEffect(() => {
@@ -64,22 +69,22 @@ export function ChatInterface() {
   // Handle scroll for mobile header visibility
   useEffect(() => {
     const handleScroll = () => {
-      if (window.innerWidth >= 768) return; // Only on mobile
+      if (isMobile) return; // Only on mobile
 
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
       const scrollingDown = scrollTop > lastScrollTop.current;
-      
+
       if (scrollingDown && scrollTop > 100) {
         setShowMobileHeader(false);
       } else {
         setShowMobileHeader(true);
       }
-      
+
       lastScrollTop.current = scrollTop;
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const handleSendMessage = async (content: string) => {
@@ -110,16 +115,12 @@ export function ChatInterface() {
     setIsLoading(true);
 
     try {
-      // Generate AI response
-      //   const aiContent = await generateAIResponse(
-      //     currentSession.messages.map(m => ({ role: m.role, content: m.content })),
-      //     content
-      //   );
+      const aiContent = await sendMessage.mutateAsync(userMessage);
 
       const aiMessage: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
-        content: "I'm currently offline for maintenance, but I'll be back shortly to help you with your queries.",
+        content: aiContent,
         timestamp: new Date(),
       };
 
@@ -266,9 +267,9 @@ export function ChatInterface() {
         {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
-          animate={{ 
-            opacity: 1, 
-            y: showMobileHeader ? 0 : -100
+          animate={{
+            opacity: 1,
+            y: showMobileHeader ? 0 : -100,
           }}
           transition={{ duration: 0.3 }}
           className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border p-3 md:p-4 shadow-sm"
@@ -313,10 +314,7 @@ export function ChatInterface() {
         <div className="flex-1 flex flex-col min-h-0">
           {/* Messages */}
           <div className="flex-1 overflow-hidden">
-            <ScrollArea 
-              ref={scrollAreaRef}
-              className="h-full"
-            >
+            <ScrollArea ref={scrollAreaRef} className="h-full">
               <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24">
                 {currentSession?.messages.length === 0 ? (
                   <motion.div

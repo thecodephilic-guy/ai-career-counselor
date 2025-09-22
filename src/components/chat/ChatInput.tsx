@@ -16,10 +16,8 @@ export function ChatInput({ onSendMessage, isLoading, disabled }: ChatInputProps
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize textarea with proper height calculation
   useEffect(() => {
     if (textareaRef.current) {
-      // Reset height to calculate new height
       textareaRef.current.style.height = 'auto';
       
       // Calculate new height based on content

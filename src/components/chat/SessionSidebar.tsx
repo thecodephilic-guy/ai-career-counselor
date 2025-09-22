@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ChatSessionData } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/useMobile';
 
 interface SessionSidebarProps {
   sessions: ChatSessionData[];
@@ -34,8 +35,8 @@ export function SessionSidebar({
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const prevSessionsLength = useRef(sessions.length);
+  const isMobile = useIsMobile();
 
-  // Auto-scroll to top when new session is added
   useEffect(() => {
     if (sessions.length > prevSessionsLength.current) {
       // New session added, scroll to top
@@ -52,10 +53,10 @@ export function SessionSidebar({
   const handleNewSession = () => {
     onNewSession();
     // Auto-close sidebar on mobile after creating new session
-    if (window.innerWidth < 768 && onToggleCollapse) {
+    if (isMobile && onToggleCollapse) {
       setTimeout(() => {
         onToggleCollapse();
-      }, 100); // Small delay to let the new session render first
+      }, 600); // 600 ms delay to let the new session render first
     }
   };
 
