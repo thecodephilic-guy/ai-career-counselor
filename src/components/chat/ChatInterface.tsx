@@ -16,7 +16,6 @@ import ThemeToggle from "../ThemeToggle";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChatMessageInput, CreateSessionInput, DeleteSessionInput } from "@/trpc/utils/types";
 
 export function ChatInterface() {
   const [sessions, setSessions] = useState<ChatSessionData[]>([]);
@@ -32,16 +31,16 @@ export function ChatInterface() {
   const trpc = useTRPC();
 
   // tRPC hooks
-  const sendMessage = useMutation<string, Error, ChatMessageInput>(trpc.sendMessage.mutationOptions());
-  const createSession = useMutation<ChatSessionData, Error, CreateSessionInput>(trpc.createSession.mutationOptions());
-  const deleteSession = useMutation<void, Error, DeleteSessionInput>(trpc.deleteSession.mutationOptions());
-  const updateSessionTitle = useMutation<void, Error, { sessionId: string; title: string }>(trpc.updateSessionTitle.mutationOptions());
+  const sendMessage = useMutation(trpc.sendMessage.mutationOptions());
+  const createSession = useMutation(trpc.createSession.mutationOptions());
+  const deleteSession = useMutation(trpc.deleteSession.mutationOptions());
+  const updateSessionTitle = useMutation(trpc.updateSessionTitle.mutationOptions());
   
   const { 
     data: serverSessions, 
     isLoading: loadingSessions,
     refetch: refetchSessions 
-  } = useQuery<ChatSessionData[]>(
+  } = useQuery(
     trpc.getSessions.queryOptions({ clientId: SessionManager.getSessionId() },
     { refetchOnWindowFocus: false })
   );
