@@ -25,10 +25,4 @@ export class SessionManager {
       localStorage.removeItem(SESSION_KEY);
     }
   }
-
-  static generateNewSessionId(): string {
-    const newId = uuidv4();
-    this.setSessionId(newId);
-    return newId;
-  }
 }

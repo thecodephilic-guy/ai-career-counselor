@@ -62,7 +62,7 @@ export function ChatInput({ onSendMessage, isLoading, disabled }: ChatInputProps
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me anything about your career..."
+              placeholder="How can I help you?"
               className="w-full min-h-[44px] md:min-h-[48px] max-h-[120px] resize-none bg-muted/50 border-border/50 focus:border-primary/50 focus:ring-primary/20 transition-all duration-200 text-sm md:text-base overflow-y-auto overflow-x-hidden no-scrollbar break-words whitespace-pre-wrap"
               style={{
                 lineHeight: '1.5',

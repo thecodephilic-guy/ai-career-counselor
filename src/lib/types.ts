@@ -1,21 +1,15 @@
-import z from "zod";
 export interface ChatMessage {
   id: string;
+  sessionId: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
 }
 
-export const chatMessageSchema = z.object({
-  id: z.string().uuidv4(),
-  role: z.enum(["user", "assistant"]),
-  content: z.string(),
-  timestamp: z.date()
-})
-
 export interface ChatSessionData {
   id: string;
   title: string;
+  clientId: string | null;
   sessionId: string;
   createdAt: Date;
   updatedAt: Date;

@@ -1,3 +1,4 @@
+import React from 'react';
 import { motion } from 'motion/react';
 import { ChatMessage } from '@/lib/types';
 import { Bot, User } from 'lucide-react';
@@ -6,6 +7,100 @@ import { cn } from '@/lib/utils';
 interface MessageBubbleProps {
   message: ChatMessage;
   isLast?: boolean;
+}
+
+// Simple markdown parser for common patterns
+function parseMarkdown(text: string): React.ReactNode {
+  // First, let's clean up the text and split into lines
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  const elements: React.ReactNode[] = [];
+  let key = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Handle numbered lists (1., 2., etc.)
+    const numberedMatch = line.match(/^(\d+)\.\s*(.+)$/);
+    if (numberedMatch) {
+      const [, number, content] = numberedMatch;
+      elements.push(
+        <div key={key++} className="flex gap-2 mb-2">
+          <span className="font-semibold min-w-[1.5rem]">{number}.</span>
+          <div className="flex-1">{parseInlineMarkdown(content)}</div>
+        </div>
+      );
+      continue;
+    }
+
+    // Handle bullet points (*, •)
+    if (line.startsWith('*') && !line.startsWith('**')) {
+      const content = line.substring(1).trim();
+      elements.push(
+        <div key={key++} className="flex gap-2 mb-1 ml-4">
+          <span className="min-w-[1rem]">•</span>
+          <div className="flex-1">{parseInlineMarkdown(content)}</div>
+        </div>
+      );
+      continue;
+    }
+
+    // Handle regular paragraphs
+    elements.push(
+      <div key={key++} className="mb-3 last:mb-0">
+        {parseInlineMarkdown(line)}
+      </div>
+    );
+  }
+
+  return <>{elements}</>;
+}
+
+// Parse inline markdown (bold, italic, etc.)
+function parseInlineMarkdown(text: string): React.ReactNode {
+  const elements: React.ReactNode[] = [];
+  let currentIndex = 0;
+  let key = 0;
+
+  // Combined regex for all bold patterns: ***text***, **text**, *text*
+  const markdownRegex = /(\*{1,3})(.*?)\1/g;
+  let match;
+
+  while ((match = markdownRegex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > currentIndex) {
+      elements.push(text.substring(currentIndex, match.index));
+    }
+
+    const asteriskCount = match[1].length;
+    const content = match[2];
+
+    // Apply formatting based on asterisk count
+    if (asteriskCount >= 2) {
+      // **text** or ***text*** -> bold
+      elements.push(
+        <strong key={key++} className="font-semibold">
+          {content}
+        </strong>
+      );
+    } else {
+      // *text* -> italic
+      elements.push(
+        <em key={key++} className="italic">
+          {content}
+        </em>
+      );
+    }
+
+    currentIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (currentIndex < text.length) {
+    elements.push(text.substring(currentIndex));
+  }
+
+  // If no markdown was found, return the original text
+  return elements.length > 0 ? <>{elements}</> : text;
 }
 
 export function MessageBubble({ message, isLast }: MessageBubbleProps) {
@@ -35,11 +130,19 @@ export function MessageBubble({ message, isLast }: MessageBubbleProps) {
           ? "bg-primary text-primary-foreground ml-8 md:ml-12 border-primary/20" 
           : "bg-card text-card-foreground mr-8 md:mr-12 border-border/50"
       )}>
-        <div className="text-sm leading-relaxed whitespace-pre-wrap">
-          {message.content}
+        <div className="text-sm leading-relaxed">
+          {isUser ? (
+            // For user messages, keep simple whitespace formatting
+            <div className="whitespace-pre-wrap">{message.content}</div>
+          ) : (
+            // For AI messages, apply markdown parsing
+            <div className="space-y-1">
+              {parseMarkdown(message.content)}
+            </div>
+          )}
         </div>
         <div className={cn(
-          "text-xs mt-1 md:mt-2 opacity-70",
+          "text-xs mt-2 md:mt-3 opacity-70",
           isUser ? "text-primary-foreground/70" : "text-muted-foreground"
         )}>
           {message.timestamp.toLocaleTimeString([], { 

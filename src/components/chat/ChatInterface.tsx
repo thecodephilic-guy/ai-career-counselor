@@ -16,12 +16,11 @@ import ThemeToggle from "../ThemeToggle";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { ChatMessageInput, CreateSessionInput, DeleteSessionInput } from "@/trpc/utils/types";
 
 export function ChatInterface() {
   const [sessions, setSessions] = useState<ChatSessionData[]>([]);
-  const [currentSession, setCurrentSession] = useState<ChatSessionData | null>(
-    null
-  );
+  const [currentSession, setCurrentSession] = useState<ChatSessionData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -31,35 +30,47 @@ export function ChatInterface() {
   const lastScrollTop = useRef(0);
   const isMobile = useIsMobile();
   const trpc = useTRPC();
-  const sendMessage = useMutation(trpc.sendMessage.mutationOptions());
 
-  // Initialize with first session and set initial mobile state
+  // tRPC hooks
+  const sendMessage = useMutation<string, Error, ChatMessageInput>(trpc.sendMessage.mutationOptions());
+  const createSession = useMutation<ChatSessionData, Error, CreateSessionInput>(trpc.createSession.mutationOptions());
+  const deleteSession = useMutation<void, Error, DeleteSessionInput>(trpc.deleteSession.mutationOptions());
+  const updateSessionTitle = useMutation<void, Error, { sessionId: string; title: string }>(trpc.updateSessionTitle.mutationOptions());
+  
+  const { 
+    data: serverSessions, 
+    isLoading: loadingSessions,
+    refetch: refetchSessions 
+  } = useQuery<ChatSessionData[]>(
+    trpc.getSessions.queryOptions({ clientId: SessionManager.getSessionId() },
+    { refetchOnWindowFocus: false })
+  );
+
+  // Initialize sessions and set initial mobile state
   useEffect(() => {
-    const sessionId = SessionManager.getSessionId();
-    const initialSession: ChatSessionData = {
-      id: uuidv4(),
-      title: "New Career Chat",
-      sessionId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      isActive: true,
-      messages: [],
-    };
+    if (!loadingSessions) {
+      if (!serverSessions || serverSessions.length === 0) {
+        // Create initial session if none exist
+        handleNewSession();
+      } else {
+        setSessions(serverSessions);
+        // Set the most recent session as current
+        const mostRecentSession = serverSessions[0];
+        setCurrentSession(mostRecentSession);
+      }
 
-    setSessions([initialSession]);
-    setCurrentSession(initialSession);
+      // Set initial sidebar state based on screen size
+      const checkScreenSize = () => {
+        setIsSidebarCollapsed(window.innerWidth < 768);
+      };
 
-    // Set initial sidebar state based on screen size
-    const checkScreenSize = () => {
-      setIsSidebarCollapsed(window.innerWidth < 768);
-    };
+      checkScreenSize();
+      window.addEventListener("resize", checkScreenSize);
+      setIsInitialized(true);
 
-    checkScreenSize();
-    window.addEventListener("resize", checkScreenSize);
-    setIsInitialized(true);
-
-    return () => window.removeEventListener("resize", checkScreenSize);
-  }, []);
+      return () => window.removeEventListener("resize", checkScreenSize);
+    }
+  }, [serverSessions, loadingSessions]);
 
   // Auto scroll to bottom
   useEffect(() => {
@@ -69,7 +80,7 @@ export function ChatInterface() {
   // Handle scroll for mobile header visibility
   useEffect(() => {
     const handleScroll = () => {
-      if (isMobile) return; // Only on mobile
+      if (!isMobile) return; // Only on mobile
 
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
       const scrollingDown = scrollTop > lastScrollTop.current;
@@ -85,27 +96,24 @@ export function ChatInterface() {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [isMobile]);
 
   const handleSendMessage = async (content: string) => {
     if (!currentSession || isLoading) return;
 
     const userMessage: ChatMessage = {
       id: uuidv4(),
+      sessionId: currentSession.sessionId,
       role: "user",
       content,
       timestamp: new Date(),
     };
 
-    // Update current session with user message
+    // Optimistically update UI
     const updatedSession = {
       ...currentSession,
       messages: [...currentSession.messages, userMessage],
       updatedAt: new Date(),
-      title:
-        currentSession.messages.length === 0
-          ? generateSessionTitle(content)
-          : currentSession.title,
     };
 
     setCurrentSession(updatedSession);
@@ -115,10 +123,18 @@ export function ChatInterface() {
     setIsLoading(true);
 
     try {
-      const aiContent = await sendMessage.mutateAsync(userMessage);
+      const aiContent = await sendMessage.mutateAsync({
+        id: userMessage.id,
+        sessionId: userMessage.sessionId,
+        role: userMessage.role,
+        content: userMessage.content,
+        timestamp: userMessage.timestamp,
+        clientId: SessionManager.getSessionId(),
+      });
 
       const aiMessage: ChatMessage = {
         id: uuidv4(),
+        sessionId: currentSession.sessionId,
         role: "assistant",
         content: aiContent,
         timestamp: new Date(),
@@ -135,14 +151,31 @@ export function ChatInterface() {
       setSessions((prev) =>
         prev.map((s) => (s.id === finalSession.id ? finalSession : s))
       );
+
+      // Update session title if it's the first message
+      if (currentSession.messages.length === 0 && currentSession.title === "New Career Chat") {
+        const newTitle = generateSessionTitle(content);
+        await updateSessionTitle.mutateAsync({
+          sessionId: currentSession.sessionId,
+          title: newTitle,
+        });
+        
+        const titleUpdatedSession = { ...finalSession, title: newTitle };
+        setCurrentSession(titleUpdatedSession);
+        setSessions((prev) =>
+          prev.map((s) => (s.id === titleUpdatedSession.id ? titleUpdatedSession : s))
+        );
+      }
+
     } catch (error) {
       console.error("Failed to get AI response:", error);
+      
       // Add error message
       const errorMessage: ChatMessage = {
         id: uuidv4(),
+        sessionId: currentSession.sessionId,
         role: "assistant",
-        content:
-          "I apologize, but I'm having trouble responding right now. Please try again.",
+        content: "I apologize, but I'm having trouble responding right now. Please try again.",
         timestamp: new Date(),
       };
 
@@ -161,27 +194,54 @@ export function ChatInterface() {
     }
   };
 
-  const handleNewSession = () => {
-    const newSessionId = SessionManager.generateNewSessionId();
-    const newSession: ChatSessionData = {
-      id: uuidv4(),
-      title: "New Career Chat",
-      sessionId: newSessionId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      isActive: true,
-      messages: [],
-    };
+  const handleNewSession = async () => {
+    try {
+      const clientId = SessionManager.getSessionId();
+      const sessionId = uuidv4();
+      
+      const newSessionData = await createSession.mutateAsync({
+        clientId,
+        sessionId,
+        title: "New Career Chat",
+      });
 
-    setSessions((prev) => [newSession, ...prev]);
-    setCurrentSession(newSession);
+      const newSession: ChatSessionData = {
+        id: newSessionData.id,
+        title: newSessionData.title,
+        clientId: newSessionData.clientId,
+        sessionId: newSessionData.sessionId,
+        createdAt: newSessionData.createdAt,
+        updatedAt: newSessionData.updatedAt,
+        isActive: newSessionData.isActive,
+        messages: [],
+      };
+
+      setSessions((prev) => [newSession, ...prev]);
+      setCurrentSession(newSession);
+    } catch (error) {
+      console.error("Failed to create new session:", error);
+      // Fallback to local session creation
+      const newSession: ChatSessionData = {
+        id: uuidv4(),
+        title: "New Career Chat",
+        clientId: SessionManager.getSessionId(),
+        sessionId: uuidv4(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isActive: true,
+        messages: [],
+      };
+
+      setSessions((prev) => [newSession, ...prev]);
+      setCurrentSession(newSession);
+    }
   };
 
-  const handleSelectSession = (sessionId: string) => {
+  const handleSelectSession = async (sessionId: string) => {
     const session = sessions.find((s) => s.id === sessionId);
     if (session) {
       setCurrentSession(session);
-      SessionManager.setSessionId(session.sessionId);
+      
       // Auto-close sidebar on mobile after selection
       if (window.innerWidth < 768) {
         setIsSidebarCollapsed(true);
@@ -189,23 +249,39 @@ export function ChatInterface() {
     }
   };
 
-  const generateSessionTitle = (firstMessage: string): string => {
-    if (firstMessage.length <= 30) return firstMessage;
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      const sessionToDelete = sessions.find((s) => s.id === sessionId);
+      if (!sessionToDelete) return;
 
-    // Extract key topics
-    const lower = firstMessage.toLowerCase();
-    if (lower.includes("resume")) return "📄 Resume Help";
-    if (lower.includes("interview")) return "🎯 Interview Prep";
-    if (lower.includes("career change")) return "🔄 Career Transition";
-    if (lower.includes("salary")) return "💰 Salary Discussion";
-    if (lower.includes("skill")) return "🚀 Skill Development";
-    if (lower.includes("network")) return "🤝 Networking Strategy";
+      await deleteSession.mutateAsync({
+        sessionId: sessionToDelete.sessionId,
+      });
 
-    return firstMessage.substring(0, 30) + "...";
+      const updatedSessions = sessions.filter((s) => s.id !== sessionId);
+      setSessions(updatedSessions);
+
+      // If we deleted the current session, switch to another one or create new
+      if (currentSession?.id === sessionId) {
+        if (updatedSessions.length > 0) {
+          setCurrentSession(updatedSessions[0]);
+        } else {
+          handleNewSession();
+        }
+      }
+    } catch (error) {
+      console.error("Failed to delete session:", error);
+    }
+  };
+
+  // Simple title generation function (moved to frontend for immediate feedback)
+  const generateSessionTitle = (content: string): string => {
+    const words = content.split(' ').slice(0, 6).join(' ');
+    return words.length > 30 ? words.substring(0, 30) + '...' : words;
   };
 
   // Show loading state while initializing
-  if (!isInitialized || !currentSession) {
+  if (!isInitialized) {
     return (
       <div className="h-screen flex bg-background items-center justify-center">
         <motion.div
@@ -257,6 +333,7 @@ export function ChatInterface() {
           currentSessionId={currentSession?.id || ""}
           onSelectSession={handleSelectSession}
           onNewSession={handleNewSession}
+          // onDeleteSession={handleDeleteSession}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
@@ -294,7 +371,7 @@ export function ChatInterface() {
                     AI Career Counselor
                   </h1>
                   <p className="text-xs md:text-sm text-muted-foreground">
-                    Your personal career assistant
+                    {currentSession?.title || "Your personal career assistant"}
                   </p>
                 </div>
               </div>
@@ -344,6 +421,7 @@ export function ChatInterface() {
                           variant="outline"
                           onClick={() => handleSendMessage(suggestion)}
                           className="text-left p-4 h-auto bg-card/50 backdrop-blur-sm hover:bg-card hover:border-primary/30 transition-all duration-200 text-sm"
+                          disabled={isLoading}
                         >
                           {suggestion}
                         </Button>
