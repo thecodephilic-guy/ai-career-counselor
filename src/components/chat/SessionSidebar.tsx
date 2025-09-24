@@ -3,13 +3,37 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { 
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
 import { 
   MessageCircle, 
   Plus, 
   PanelRightClose,
   PanelLeftClose,
   Calendar,
-  Clock
+  Clock,
+  Edit3,
+  Trash2,
+  Check,
+  X,
+  BrushCleaning,
+  TriangleAlert
 } from 'lucide-react';
 import { ChatSessionData } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -20,8 +44,11 @@ interface SessionSidebarProps {
   currentSessionId: string;
   onSelectSession: (sessionId: string) => void;
   onNewSession: () => void;
+  onDeleteSession?: (sessionId: string) => void;
+  onRenameSession?: (sessionId: string, newTitle: string) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onSessionClear: () => void;
 }
 
 export function SessionSidebar({ 
@@ -29,11 +56,20 @@ export function SessionSidebar({
   currentSessionId, 
   onSelectSession, 
   onNewSession,
+  onDeleteSession,
+  onRenameSession,
   isCollapsed = false,
-  onToggleCollapse 
+  onToggleCollapse,
+  onSessionClear
 }: SessionSidebarProps) {
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
+  const [editingSession, setEditingSession] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [openClearDialog, setOpenClearDialog] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const prevSessionsLength = useRef(sessions.length);
   const isMobile = useIsMobile();
 
@@ -50,6 +86,13 @@ export function SessionSidebar({
     prevSessionsLength.current = sessions.length;
   }, [sessions.length]);
 
+  useEffect(() => {
+    if (editingSession && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingSession]);
+
   const handleNewSession = () => {
     onNewSession();
     // Auto-close sidebar on mobile after creating new session
@@ -57,6 +100,36 @@ export function SessionSidebar({
       setTimeout(() => {
         onToggleCollapse();
       }, 600); // 600 ms delay to let the new session render first
+    }
+  };
+
+  const handleStartEdit = (sessionId: string, currentTitle: string) => {
+    setEditingSession(sessionId);
+    setEditTitle(currentTitle);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingSession && editTitle.trim() && onRenameSession) {
+      onRenameSession(editingSession, editTitle.trim());
+    }
+    setEditingSession(null);
+    setEditTitle('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSession(null);
+    setEditTitle('');
+  };
+
+  const handleClearAllSessions = () => {
+    onSessionClear();
+    setOpenClearDialog(false);
+  };
+
+  const handleDeleteSession = (sessionId: string) => {
+    if (onDeleteSession) {
+      onDeleteSession(sessionId);
+      setSessionToDelete(null);
     }
   };
 
@@ -115,7 +188,8 @@ export function SessionSidebar({
           )}
           
         {!isCollapsed && (
-          <AnimatePresence mode="wait">
+          <div className='flex items-center w-full'>
+            <AnimatePresence mode="wait">
             <motion.h2
               key="sidebar-title"
               initial={{ opacity: 0, x: -30 }}
@@ -131,6 +205,43 @@ export function SessionSidebar({
               Chat Sessions
             </motion.h2>
           </AnimatePresence>
+            <AlertDialog open={openClearDialog} onOpenChange={setOpenClearDialog}>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                title="Clear all sessions"
+              >
+                <BrushCleaning className="w-4 h-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  <div className='flex space-x-1 items-center'>
+                    <TriangleAlert className='dark:text-chart-3 text-destructive w-5 h-5'/> 
+                    <span>Warning: Delete All Sessions</span>
+                  </div>
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete <strong>ALL</strong> your chat sessions and stored data.
+                  This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleClearAllSessions}
+                  className="bg-destructive text-primary-foreground hover:bg-destructive/90"
+                >
+                  Yes, Delete Everything
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          </div>
+          
         )}
         </div>
         
@@ -211,77 +322,141 @@ export function SessionSidebar({
                   onMouseEnter={() => setHoveredSession(session.id)}
                   onMouseLeave={() => setHoveredSession(null)}
                 >
-                  <Card
-                    className={cn(
-                      "p-3 cursor-pointer transition-all duration-200 border-sidebar-border/50 hover:border-sidebar-primary/30 bg-sidebar/50 backdrop-blur-sm",
-                      currentSessionId === session.id 
-                        ? "bg-sidebar-primary/10 border-sidebar-primary/40 shadow-lg shadow-sidebar-primary/20" 
-                        : "hover:bg-sidebar/80",
-                      isCollapsed && "p-2"
-                    )}
-                    onClick={() => onSelectSession(session.id)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={cn(
-                        "flex-shrink-0 rounded-full flex items-center justify-center transition-colors",
-                        isCollapsed ? "w-6 h-6" : "w-8 h-8",
-                        currentSessionId === session.id 
-                          ? "bg-gradient-to-r from-sidebar-primary to-sidebar-primary/80 text-sidebar-primary-foreground shadow-md" 
-                          : "bg-sidebar-accent text-sidebar-accent-foreground"
-                      )}>
-                        <MessageCircle className={cn(
-                          isCollapsed ? "w-3 h-3" : "w-4 h-4"
-                        )} />
-                      </div>
-                      
-                      {!isCollapsed && (
-                        <AnimatePresence mode="wait">
-                          <motion.div
-                            key={`session-content-${session.id}`}
-                            initial={{ opacity: 0, width: 0, x: -20 }}
-                            animate={{ opacity: 1, width: "auto", x: 0 }}
-                            exit={{ opacity: 0, width: 0, x: -20 }}
-                            transition={{ 
-                              duration: 0.4,
-                              delay: 0.1,
-                              ease: [0.25, 0.46, 0.45, 0.94]
-                            }}
-                            className="flex-1 min-w-0"
-                          >
-                            <motion.h3 
-                              className="font-medium text-sm text-sidebar-foreground truncate"
-                              layout="position"
-                              transition={{ duration: 0.3 }}
-                            >
-                              {session.title}
-                            </motion.h3>
-                            
-                            <motion.div 
-                              className="flex items-center gap-2 mt-1 text-xs text-muted-foreground"
-                              layout="position"
-                              transition={{ duration: 0.3, delay: 0.05 }}
-                            >
-                              <Calendar className="w-3 h-3" />
-                              <span>{formatDate(session.updatedAt)}</span>
-                              <Clock className="w-3 h-3 ml-1" />
-                              <span>{formatTime(session.updatedAt)}</span>
-                            </motion.div>
-                            
-                            {session.messages.length > 0 && (
-                              <motion.div 
-                                className="mt-2 text-xs text-muted-foreground/80 truncate"
-                                layout="position"
-                                transition={{ duration: 0.3, delay: 0.1 }}
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <Card
+                        className={cn(
+                          "p-3 cursor-pointer transition-all duration-200 border-sidebar-border/50 hover:border-sidebar-primary/30 bg-sidebar/50 backdrop-blur-sm",
+                          currentSessionId === session.id 
+                            ? "bg-sidebar-primary/10 border-sidebar-primary/40 shadow-lg shadow-sidebar-primary/20" 
+                            : "hover:bg-sidebar/80",
+                          isCollapsed && "p-2"
+                        )}
+                        onClick={() => onSelectSession(session.id)}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={cn(
+                            "flex-shrink-0 rounded-full flex items-center justify-center transition-colors",
+                            isCollapsed ? "w-6 h-6" : "w-8 h-8",
+                            currentSessionId === session.id 
+                              ? "bg-gradient-to-r from-sidebar-primary to-sidebar-primary/80 text-sidebar-primary-foreground shadow-md" 
+                              : "bg-sidebar-accent text-sidebar-accent-foreground"
+                          )}>
+                            <MessageCircle className={cn(
+                              isCollapsed ? "w-3 h-3" : "w-4 h-4"
+                            )} />
+                          </div>
+                          
+                          {!isCollapsed && (
+                            <AnimatePresence mode="wait">
+                              <motion.div
+                                key={`session-content-${session.id}`}
+                                initial={{ opacity: 0, width: 0, x: -20 }}
+                                animate={{ opacity: 1, width: "auto", x: 0 }}
+                                exit={{ opacity: 0, width: 0, x: -20 }}
+                                transition={{ 
+                                  duration: 0.4,
+                                  delay: 0.1,
+                                  ease: [0.25, 0.46, 0.45, 0.94]
+                                }}
+                                className="flex-1 min-w-0"
                               >
-                                {session.messages[session.messages.length - 1].content.substring(0, 40)}
-                                {session.messages[session.messages.length - 1].content.length > 40 && '...'}
+                                {editingSession === session.id ? (
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      ref={editInputRef}
+                                      value={editTitle}
+                                      onChange={(e) => setEditTitle(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleSaveEdit();
+                                        if (e.key === 'Escape') handleCancelEdit();
+                                      }}
+                                      className="h-6 text-xs"
+                                      onBlur={handleSaveEdit}
+                                    />
+                                    <div className="flex gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-6 w-6 p-0"
+                                        onClick={handleSaveEdit}
+                                      >
+                                        <Check className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-6 w-6 p-0"
+                                        onClick={handleCancelEdit}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <motion.h3 
+                                      className="font-medium text-sm text-sidebar-foreground truncate"
+                                      layout="position"
+                                      transition={{ duration: 0.3 }}
+                                    >
+                                      {session.title}
+                                    </motion.h3>
+                                    
+                                    <motion.div 
+                                      className="flex items-center gap-2 mt-1 text-xs text-muted-foreground"
+                                      layout="position"
+                                      transition={{ duration: 0.3, delay: 0.05 }}
+                                    >
+                                      <Calendar className="w-3 h-3" />
+                                      <span>{formatDate(session.updatedAt)}</span>
+                                      <Clock className="w-3 h-3 ml-1" />
+                                      <span>{formatTime(session.updatedAt)}</span>
+                                    </motion.div>
+                                    
+                                    {session.messages.length > 0 && (
+                                      <motion.div 
+                                        className="mt-2 text-xs text-muted-foreground/80 truncate"
+                                        layout="position"
+                                        transition={{ duration: 0.3, delay: 0.1 }}
+                                      >
+                                        {session.messages[session.messages.length - 1].content.substring(0, 30)}
+                                        {session.messages[session.messages.length - 1].content.length > 30 && '...'}
+                                      </motion.div>
+                                    )}
+                                  </>
+                                )}
                               </motion.div>
-                            )}
-                          </motion.div>
-                        </AnimatePresence>
-                      )}
-                    </div>
-                  </Card>
+                            </AnimatePresence>
+                          )}
+                        </div>
+                      </Card>
+                    </ContextMenuTrigger>
+                    
+                    {!isCollapsed && (
+                      <ContextMenuContent className="w-48">
+                        <ContextMenuItem 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEdit(session.id, session.title);
+                          }}
+                        >
+                          <Edit3 className="mr-2 h-4 w-4" />
+                          Rename
+                        </ContextMenuItem>
+                        <ContextMenuItem 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSessionToDelete(session.id);
+                          }}
+                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    )}
+                  </ContextMenu>
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -334,6 +509,32 @@ export function SessionSidebar({
           </div>
         </ScrollArea>
       </div>
+
+      {/* Individual Session Delete Dialog */}
+      <AlertDialog open={sessionToDelete !== null} onOpenChange={(open) => !open && setSessionToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              <div className='flex space-x-1 items-center'>
+                <TriangleAlert className='text-destructive w-5 h-5'/> 
+                <span>Delete Chat Session</span>
+              </div>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this chat session? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => sessionToDelete && handleDeleteSession(sessionToDelete)}
+              className="bg-destructive text-primary-foreground hover:bg-destructive/90"
+            >
+              Delete Session
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }

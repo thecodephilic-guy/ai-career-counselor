@@ -11,8 +11,16 @@ import {
 import { generateAIResponse, generateContextualAIResponse } from "../gemini";
 import { chatMessages } from "../db/schema";
 import { chatSessions } from "../db/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, lt, and } from "drizzle-orm";
 import { generateSessionTitle } from "../utils/shared";
+import { z } from "zod";
+
+// New schema for paginated messages
+const getPaginatedMessagesInput = z.object({
+  sessionId: z.string(),
+  limit: z.number().min(1).max(100).default(50),
+  cursor: z.string().optional(), // cursor for pagination (message ID)
+});
 
 export const appRouter = createTRPCRouter({
   /**
@@ -46,7 +54,7 @@ export const appRouter = createTRPCRouter({
         }
 
         // 2. Insert user message
-        await db
+        const [userMessage] = await db
           .insert(chatMessages)
           .values({
             sessionId, // user's sessionId
@@ -54,7 +62,8 @@ export const appRouter = createTRPCRouter({
             role,
             content,
             timestamp,
-          });
+          })
+          .returning();
 
         // 3. Get recent message history for context (last 20 messages)
         const recentMessages = await db
@@ -88,7 +97,7 @@ export const appRouter = createTRPCRouter({
         }
 
         // 5. Insert assistant message
-        await db
+        const [aiMessage] = await db
           .insert(chatMessages)
           .values({
             sessionId,
@@ -96,7 +105,8 @@ export const appRouter = createTRPCRouter({
             role: "assistant",
             content: aiContent,
             timestamp: new Date(),
-          });
+          })
+          .returning();
 
         // 6. Update session timestamp
         await db
@@ -104,7 +114,11 @@ export const appRouter = createTRPCRouter({
           .set({ updatedAt: new Date() })
           .where(eq(chatSessions.id, session.id));
 
-        return aiContent;
+        return {
+          content: aiContent,
+          userMessageId: userMessage.id,
+          aiMessageId: aiMessage.id,
+        };
       } catch (err) {
         console.error("Unexpected sendMessage error:", err);
         throw new Error("Failed to send message. Please try again.");
@@ -112,7 +126,81 @@ export const appRouter = createTRPCRouter({
     }),
 
   /**
-   * Get all sessions for a client
+   * Get paginated messages for a session
+   */
+  getPaginatedMessages: baseProcedure
+    .input(getPaginatedMessagesInput)
+    .query(async ({ ctx, input }) => {
+      const { db } = ctx;
+      const { sessionId, limit, cursor } = input;
+
+      try {
+        // First, find the session to get its ID
+        const [session] = await db
+          .select()
+          .from(chatSessions)
+          .where(eq(chatSessions.sessionId, sessionId))
+          .limit(1);
+
+        if (!session) {
+          throw new Error("Session not found");
+        }
+
+        // Build conditions array for dynamic where clause
+        const conditions = [eq(chatMessages.chatSessionId, session.id)];
+
+        // If cursor is provided, get messages before this cursor (for loading older messages)
+        if (cursor) {
+          const cursorMessage = await db
+            .select({ timestamp: chatMessages.timestamp })
+            .from(chatMessages)
+            .where(eq(chatMessages.id, cursor))
+            .limit(1);
+
+          if (cursorMessage[0]) {
+            conditions.push(lt(chatMessages.timestamp, cursorMessage[0].timestamp));
+          }
+        }
+
+        // Build the complete query with all conditions
+        const messages = await db
+          .select({
+            id: chatMessages.id,
+            sessionId: chatMessages.sessionId,
+            role: chatMessages.role,
+            content: chatMessages.content,
+            timestamp: chatMessages.timestamp,
+          })
+          .from(chatMessages)
+          .where(and(...conditions))
+          .orderBy(desc(chatMessages.timestamp))
+          .limit(limit + 1); // Get one extra to check if there are more
+
+        // Check if there are more messages
+        const hasNextPage = messages.length > limit;
+        const resultMessages = hasNextPage ? messages.slice(0, -1) : messages;
+
+        // Reverse to get chronological order (oldest first)
+        resultMessages.reverse();
+
+        // Get the cursor for the next page (oldest message id)
+        const nextCursor = hasNextPage && messages.length > 0
+          ? messages[messages.length - 2].id // Second to last because we sliced off the last one
+          : null;
+
+        return {
+          messages: resultMessages,
+          nextCursor,
+          hasNextPage,
+        };
+      } catch (err) {
+        console.error("Failed to get paginated messages:", err);
+        throw new Error("Failed to retrieve messages. Please try again.");
+      }
+    }),
+
+  /**
+   * Get all sessions for a client (now loads only basic session info, messages loaded separately)
    */
   getSessions: baseProcedure
     .input(fetchSessionsInput)
@@ -126,9 +214,10 @@ export const appRouter = createTRPCRouter({
         .where(eq(chatSessions.clientId, clientId))
         .orderBy(desc(chatSessions.updatedAt));
 
+      // For each session, get only the latest message for preview
       const result = await Promise.all(
         sessions.map(async (session) => {
-          const messages = await db
+          const latestMessages = await db
             .select({
               id: chatMessages.id,
               sessionId: chatMessages.sessionId,
@@ -138,7 +227,11 @@ export const appRouter = createTRPCRouter({
             })
             .from(chatMessages)
             .where(eq(chatMessages.chatSessionId, session.id))
-            .orderBy(chatMessages.timestamp); // Chronological order
+            .orderBy(desc(chatMessages.timestamp))
+            .limit(20); // Get last 20 messages for initial load
+
+          // Reverse to get chronological order
+          const messages = latestMessages.reverse();
 
           return {
             ...session,
@@ -245,7 +338,7 @@ export const appRouter = createTRPCRouter({
     }),
 
   /**
-   * Get messages for a specific session
+   * Get messages for a specific session (kept for backward compatibility)
    */
   getSessionMessages: baseProcedure
     .input(getSessionMessagesInput)

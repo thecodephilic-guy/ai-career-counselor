@@ -55,14 +55,15 @@ function parseMarkdown(text: string): React.ReactNode {
   return <>{elements}</>;
 }
 
-// Parse inline markdown (bold, italic, etc.)
+// Parse inline markdown (bold, italic, links)
 function parseInlineMarkdown(text: string): React.ReactNode {
   const elements: React.ReactNode[] = [];
   let currentIndex = 0;
   let key = 0;
 
-  // Combined regex for all bold patterns: ***text***, **text**, *text*
-  const markdownRegex = /(\*{1,3})(.*?)\1/g;
+  // Combined regex for markdown patterns and links
+  // This regex matches: ***text***, **text**, *text*, [text](url), and standalone URLs
+  const markdownRegex = /(\*{1,3})(.*?)\1|(\[([^\]]+)\]\(([^)]+)\))|(https?:\/\/[^\s\)]+)/g;
   let match;
 
   while ((match = markdownRegex.exec(text)) !== null) {
@@ -71,23 +72,54 @@ function parseInlineMarkdown(text: string): React.ReactNode {
       elements.push(text.substring(currentIndex, match.index));
     }
 
-    const asteriskCount = match[1].length;
-    const content = match[2];
+    if (match[1] && match[2]) {
+      // Markdown formatting (*text*, **text**, ***text***)
+      const asteriskCount = match[1].length;
+      const content = match[2];
 
-    // Apply formatting based on asterisk count
-    if (asteriskCount >= 2) {
-      // **text** or ***text*** -> bold
+      if (asteriskCount >= 2) {
+        // **text** or ***text*** -> bold
+        elements.push(
+          <strong key={key++} className="font-semibold">
+            {content}
+          </strong>
+        );
+      } else {
+        // *text* -> italic
+        elements.push(
+          <em key={key++} className="italic">
+            {content}
+          </em>
+        );
+      }
+    } else if (match[3]) {
+      // Markdown link [text](url)
+      const linkText = match[4];
+      const url = match[5];
       elements.push(
-        <strong key={key++} className="font-semibold">
-          {content}
-        </strong>
+        <a
+          key={key++}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 hover:text-blue-600 underline decoration-blue-500/30 hover:decoration-blue-600 transition-colors"
+        >
+          {linkText}
+        </a>
       );
-    } else {
-      // *text* -> italic
+    } else if (match[6]) {
+      // Standalone URL
+      const url = match[6];
       elements.push(
-        <em key={key++} className="italic">
-          {content}
-        </em>
+        <a
+          key={key++}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 hover:text-blue-600 underline decoration-blue-500/30 hover:decoration-blue-600 transition-colors break-all"
+        >
+          {url}
+        </a>
       );
     }
 
@@ -135,7 +167,7 @@ export function MessageBubble({ message, isLast }: MessageBubbleProps) {
             // For user messages, keep simple whitespace formatting
             <div className="whitespace-pre-wrap">{message.content}</div>
           ) : (
-            // For AI messages, apply markdown parsing
+            // For AI messages, apply markdown parsing with link support
             <div className="space-y-1">
               {parseMarkdown(message.content)}
             </div>

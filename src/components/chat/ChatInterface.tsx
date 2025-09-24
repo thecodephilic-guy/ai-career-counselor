@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,13 @@ import { ChatInput } from "./ChatInput";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatMessage, ChatSessionData } from "@/lib/types";
 import { SessionManager } from "@/lib/session";
-import { Sparkles, Brain, Menu } from "lucide-react";
+import { Sparkles, Brain, Menu, AlertTriangle } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import ThemeToggle from "../ThemeToggle";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useTRPC } from "@/trpc/client";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export function ChatInterface() {
   const [sessions, setSessions] = useState<ChatSessionData[]>([]);
@@ -24,8 +25,10 @@ export function ChatInterface() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [showMobileHeader, setShowMobileHeader] = useState(true);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesTopRef = useRef<HTMLDivElement>(null);
   const lastScrollTop = useRef(0);
   const isMobile = useIsMobile();
   const trpc = useTRPC();
@@ -35,6 +38,7 @@ export function ChatInterface() {
   const createSession = useMutation(trpc.createSession.mutationOptions());
   const deleteSession = useMutation(trpc.deleteSession.mutationOptions());
   const updateSessionTitle = useMutation(trpc.updateSessionTitle.mutationOptions());
+  const clearAllSessions = useMutation(trpc.clearAllSessions.mutationOptions());
   
   const { 
     data: serverSessions, 
@@ -43,6 +47,25 @@ export function ChatInterface() {
   } = useQuery(
     trpc.getSessions.queryOptions({ clientId: SessionManager.getSessionId() },
     { refetchOnWindowFocus: false })
+  );
+
+  // Infinite query for messages when we have a current session
+  const {
+    data: messagesData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: loadingMessages,
+    refetch: refetchMessages,
+  } = useInfiniteQuery(
+    trpc.getPaginatedMessages.infiniteQueryOptions(
+      currentSession ? { sessionId: currentSession.sessionId, limit: 50 } : { sessionId: '', limit: 50 },
+      {
+        enabled: !!currentSession,
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+        refetchOnWindowFocus: false,
+      }
+    )
   );
 
   // Initialize sessions and set initial mobile state
@@ -71,31 +94,59 @@ export function ChatInterface() {
     }
   }, [serverSessions, loadingSessions]);
 
-  // Auto scroll to bottom
+  // Update current session messages when infinite query data changes
+  useEffect(() => {
+    if (messagesData && currentSession) {
+      const allMessages = messagesData.pages.flatMap(page => page.messages);
+      
+      const updatedSession = {
+        ...currentSession,
+        messages: allMessages,
+      };
+      
+      setCurrentSession(updatedSession);
+    }
+  }, [messagesData, currentSession?.sessionId]);
+
+  // Auto scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [currentSession?.messages, isLoading]);
+  }, [currentSession?.messages?.length, isLoading]);
 
-  // Handle scroll for mobile header visibility
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!isMobile) return; // Only on mobile
+  // Handle scroll for mobile header visibility and infinite scroll
+  const handleScroll = useCallback(() => {
+    if (!scrollAreaRef.current) return;
 
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+    if (!viewport) return;
+
+    const scrollTop = viewport.scrollTop;
+    
+    // Mobile header visibility (only on mobile)
+    if (isMobile) {
       const scrollingDown = scrollTop > lastScrollTop.current;
-
       if (scrollingDown && scrollTop > 100) {
         setShowMobileHeader(false);
       } else {
         setShowMobileHeader(true);
       }
+    }
 
-      lastScrollTop.current = scrollTop;
-    };
+    // Infinite scroll for loading older messages
+    if (scrollTop === 0 && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [isMobile]);
+    lastScrollTop.current = scrollTop;
+  }, [isMobile, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  useEffect(() => {
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (viewport) {
+      viewport.addEventListener("scroll", handleScroll, { passive: true });
+      return () => viewport.removeEventListener("scroll", handleScroll);
+    }
+  }, [handleScroll]);
 
   const handleSendMessage = async (content: string) => {
     if (!currentSession || isLoading) return;
@@ -111,7 +162,7 @@ export function ChatInterface() {
     // Optimistically update UI
     const updatedSession = {
       ...currentSession,
-      messages: [...currentSession.messages, userMessage],
+      messages: [...(currentSession.messages || []), userMessage],
       updatedAt: new Date(),
     };
 
@@ -122,12 +173,8 @@ export function ChatInterface() {
     setIsLoading(true);
 
     try {
-      const aiContent = await sendMessage.mutateAsync({
-        id: userMessage.id,
-        sessionId: userMessage.sessionId,
-        role: userMessage.role,
-        content: userMessage.content,
-        timestamp: userMessage.timestamp,
+      const response = await sendMessage.mutateAsync({
+        ...userMessage,
         clientId: SessionManager.getSessionId(),
       });
 
@@ -135,7 +182,7 @@ export function ChatInterface() {
         id: uuidv4(),
         sessionId: currentSession.sessionId,
         role: "assistant",
-        content: aiContent,
+        content: response.content, // Handle both old and new response formats
         timestamp: new Date(),
       };
 
@@ -152,7 +199,7 @@ export function ChatInterface() {
       );
 
       // Update session title if it's the first message
-      if (currentSession.messages.length === 0 && currentSession.title === "New Career Chat") {
+      if ((currentSession.messages?.length || 0) === 0 && currentSession.title === "New Career Chat") {
         const newTitle = generateSessionTitle(content);
         await updateSessionTitle.mutateAsync({
           sessionId: currentSession.sessionId,
@@ -165,6 +212,9 @@ export function ChatInterface() {
           prev.map((s) => (s.id === titleUpdatedSession.id ? titleUpdatedSession : s))
         );
       }
+
+      // Refetch messages to ensure consistency
+      await refetchMessages();
 
     } catch (error) {
       console.error("Failed to get AI response:", error);
@@ -194,6 +244,11 @@ export function ChatInterface() {
   };
 
   const handleNewSession = async () => {
+    if(currentSession && currentSession.title === "New Career Chat" && (currentSession.messages?.length || 0) === 0){
+      toast.warning("New chat already exists");
+      return;
+    }
+
     try {
       const clientId = SessionManager.getSessionId();
       const sessionId = uuidv4();
@@ -219,20 +274,7 @@ export function ChatInterface() {
       setCurrentSession(newSession);
     } catch (error) {
       console.error("Failed to create new session:", error);
-      // Fallback to local session creation
-      const newSession: ChatSessionData = {
-        id: uuidv4(),
-        title: "New Career Chat",
-        clientId: SessionManager.getSessionId(),
-        sessionId: uuidv4(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        isActive: true,
-        messages: [],
-      };
-
-      setSessions((prev) => [newSession, ...prev]);
-      setCurrentSession(newSession);
+      toast.error("Failed to create new session");
     }
   };
 
@@ -265,15 +307,69 @@ export function ChatInterface() {
         if (updatedSessions.length > 0) {
           setCurrentSession(updatedSessions[0]);
         } else {
-          handleNewSession();
+          await handleNewSession();
         }
       }
+
+      toast.success("Session deleted successfully");
     } catch (error) {
       console.error("Failed to delete session:", error);
+      toast.error("Failed to delete session");
     }
   };
 
-  // Simple title generation function (moved to frontend for immediate feedback)
+  const handleRenameSession = async (sessionId: string, newTitle: string) => {
+    try {
+      const sessionToUpdate = sessions.find((s) => s.id === sessionId);
+      if (!sessionToUpdate) return;
+
+      await updateSessionTitle.mutateAsync({
+        sessionId: sessionToUpdate.sessionId,
+        title: newTitle,
+      });
+
+      // Update local state
+      const updatedSessions = sessions.map((s) => 
+        s.id === sessionId ? { ...s, title: newTitle } : s
+      );
+      setSessions(updatedSessions);
+
+      if (currentSession?.id === sessionId) {
+        setCurrentSession({ ...currentSession, title: newTitle });
+      }
+
+      toast.success("Session renamed successfully");
+    } catch (error) {
+      console.error("Failed to rename session:", error);
+      toast.error("Failed to rename session");
+    }
+  };
+
+  const handleClearAllSessions = async () => {
+
+    try {
+      await clearAllSessions.mutateAsync({
+        clientId: SessionManager.getSessionId(),
+      });
+
+      // Clear local storage session ID
+      SessionManager.clearSession();
+      
+      // Reset all local state
+      setSessions([]);
+      setCurrentSession(null);
+      
+      // Create a new session
+      await handleNewSession();
+      
+      toast.success("All sessions cleared successfully");
+    } catch (error) {
+      console.error("Failed to clear all sessions:", error);
+      toast.error("Failed to clear all sessions");
+    }
+  };
+
+  // Simple title generation function
   const generateSessionTitle = (content: string): string => {
     const words = content.split(' ').slice(0, 6).join(' ');
     return words.length > 30 ? words.substring(0, 30) + '...' : words;
@@ -332,9 +428,11 @@ export function ChatInterface() {
           currentSessionId={currentSession?.id || ""}
           onSelectSession={handleSelectSession}
           onNewSession={handleNewSession}
-          // onDeleteSession={handleDeleteSession}
+          onDeleteSession={handleDeleteSession}
+          onRenameSession={handleRenameSession}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          onSessionClear={handleClearAllSessions}
         />
       </div>
 
@@ -392,7 +490,16 @@ export function ChatInterface() {
           <div className="flex-1 overflow-hidden">
             <ScrollArea ref={scrollAreaRef} className="h-full">
               <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24">
-                {currentSession?.messages.length === 0 ? (
+                {/* Loading indicator for fetching older messages */}
+                <div ref={messagesTopRef}>
+                  {isFetchingNextPage && (
+                    <div className="flex justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                    </div>
+                  )}
+                </div>
+
+                {(currentSession?.messages?.length || 0) === 0 ? (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -429,12 +536,12 @@ export function ChatInterface() {
                   </motion.div>
                 ) : (
                   <AnimatePresence mode="popLayout">
-                    {currentSession?.messages.map((message, index) => (
+                    {currentSession?.messages?.map((message, index) => (
                       <MessageBubble
                         key={message.id}
                         message={message}
                         isLast={
-                          index === (currentSession?.messages.length || 0) - 1
+                          index === (currentSession?.messages?.length || 0) - 1
                         }
                       />
                     ))}
