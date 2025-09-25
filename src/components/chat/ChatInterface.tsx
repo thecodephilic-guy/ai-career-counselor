@@ -4,15 +4,15 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import Header from "./Header";
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { ChatInput } from "./ChatInput";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatMessage, ChatSessionData } from "@/lib/types";
 import { SessionManager } from "@/lib/session";
-import { Sparkles, Brain, Menu, AlertTriangle } from "lucide-react";
+import { Brain } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
-import ThemeToggle from "../ThemeToggle";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery, useInfiniteQuery } from "@tanstack/react-query";
@@ -20,12 +20,13 @@ import { toast } from "sonner";
 
 export function ChatInterface() {
   const [sessions, setSessions] = useState<ChatSessionData[]>([]);
-  const [currentSession, setCurrentSession] = useState<ChatSessionData | null>(null);
+  const [currentSession, setCurrentSession] = useState<ChatSessionData | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [showMobileHeader, setShowMobileHeader] = useState(true);
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesTopRef = useRef<HTMLDivElement>(null);
@@ -37,16 +38,20 @@ export function ChatInterface() {
   const sendMessage = useMutation(trpc.sendMessage.mutationOptions());
   const createSession = useMutation(trpc.createSession.mutationOptions());
   const deleteSession = useMutation(trpc.deleteSession.mutationOptions());
-  const updateSessionTitle = useMutation(trpc.updateSessionTitle.mutationOptions());
+  const updateSessionTitle = useMutation(
+    trpc.updateSessionTitle.mutationOptions()
+  );
   const clearAllSessions = useMutation(trpc.clearAllSessions.mutationOptions());
-  
-  const { 
-    data: serverSessions, 
+
+  const {
+    data: serverSessions,
     isLoading: loadingSessions,
-    refetch: refetchSessions 
+    refetch: refetchSessions,
   } = useQuery(
-    trpc.getSessions.queryOptions({ clientId: SessionManager.getSessionId() },
-    { refetchOnWindowFocus: false })
+    trpc.getSessions.queryOptions(
+      { clientId: SessionManager.getSessionId() },
+      { refetchOnWindowFocus: false }
+    )
   );
 
   // Infinite query for messages when we have a current session
@@ -59,7 +64,9 @@ export function ChatInterface() {
     refetch: refetchMessages,
   } = useInfiniteQuery(
     trpc.getPaginatedMessages.infiniteQueryOptions(
-      currentSession ? { sessionId: currentSession.sessionId, limit: 50 } : { sessionId: '', limit: 50 },
+      currentSession
+        ? { sessionId: currentSession.sessionId, limit: 50 }
+        : { sessionId: "", limit: 50 },
       {
         enabled: !!currentSession,
         getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -97,13 +104,13 @@ export function ChatInterface() {
   // Update current session messages when infinite query data changes
   useEffect(() => {
     if (messagesData && currentSession) {
-      const allMessages = messagesData.pages.flatMap(page => page.messages);
-      
+      const allMessages = messagesData.pages.flatMap((page) => page.messages);
+
       const updatedSession = {
         ...currentSession,
         messages: allMessages,
       };
-      
+
       setCurrentSession(updatedSession);
     }
   }, [messagesData, currentSession?.sessionId]);
@@ -117,20 +124,12 @@ export function ChatInterface() {
   const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current) return;
 
-    const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+    const viewport = scrollAreaRef.current.querySelector(
+      "[data-radix-scroll-area-viewport]"
+    );
     if (!viewport) return;
 
     const scrollTop = viewport.scrollTop;
-    
-    // Mobile header visibility (only on mobile)
-    if (isMobile) {
-      const scrollingDown = scrollTop > lastScrollTop.current;
-      if (scrollingDown && scrollTop > 100) {
-        setShowMobileHeader(false);
-      } else {
-        setShowMobileHeader(true);
-      }
-    }
 
     // Infinite scroll for loading older messages
     if (scrollTop === 0 && hasNextPage && !isFetchingNextPage) {
@@ -141,7 +140,9 @@ export function ChatInterface() {
   }, [isMobile, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   useEffect(() => {
-    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    const viewport = scrollAreaRef.current?.querySelector(
+      "[data-radix-scroll-area-viewport]"
+    );
     if (viewport) {
       viewport.addEventListener("scroll", handleScroll, { passive: true });
       return () => viewport.removeEventListener("scroll", handleScroll);
@@ -199,32 +200,37 @@ export function ChatInterface() {
       );
 
       // Update session title if it's the first message
-      if ((currentSession.messages?.length || 0) === 0 && currentSession.title === "New Career Chat") {
+      if (
+        (currentSession.messages?.length || 0) === 0 &&
+        currentSession.title === "New Career Chat"
+      ) {
         const newTitle = generateSessionTitle(content);
         await updateSessionTitle.mutateAsync({
           sessionId: currentSession.sessionId,
           title: newTitle,
         });
-        
+
         const titleUpdatedSession = { ...finalSession, title: newTitle };
         setCurrentSession(titleUpdatedSession);
         setSessions((prev) =>
-          prev.map((s) => (s.id === titleUpdatedSession.id ? titleUpdatedSession : s))
+          prev.map((s) =>
+            s.id === titleUpdatedSession.id ? titleUpdatedSession : s
+          )
         );
       }
 
       // Refetch messages to ensure consistency
       await refetchMessages();
-
     } catch (error) {
       console.error("Failed to get AI response:", error);
-      
+
       // Add error message
       const errorMessage: ChatMessage = {
         id: uuidv4(),
         sessionId: currentSession.sessionId,
         role: "assistant",
-        content: "I apologize, but I'm having trouble responding right now. Please try again.",
+        content:
+          "I apologize, but I'm having trouble responding right now. Please try again.",
         timestamp: new Date(),
       };
 
@@ -244,7 +250,11 @@ export function ChatInterface() {
   };
 
   const handleNewSession = async () => {
-    if(currentSession && currentSession.title === "New Career Chat" && (currentSession.messages?.length || 0) === 0){
+    if (
+      currentSession &&
+      currentSession.title === "New Career Chat" &&
+      (currentSession.messages?.length || 0) === 0
+    ) {
       toast.warning("New chat already exists");
       return;
     }
@@ -252,7 +262,7 @@ export function ChatInterface() {
     try {
       const clientId = SessionManager.getSessionId();
       const sessionId = uuidv4();
-      
+
       const newSessionData = await createSession.mutateAsync({
         clientId,
         sessionId,
@@ -282,7 +292,7 @@ export function ChatInterface() {
     const session = sessions.find((s) => s.id === sessionId);
     if (session) {
       setCurrentSession(session);
-      
+
       // Auto-close sidebar on mobile after selection
       if (window.innerWidth < 768) {
         setIsSidebarCollapsed(true);
@@ -329,7 +339,7 @@ export function ChatInterface() {
       });
 
       // Update local state
-      const updatedSessions = sessions.map((s) => 
+      const updatedSessions = sessions.map((s) =>
         s.id === sessionId ? { ...s, title: newTitle } : s
       );
       setSessions(updatedSessions);
@@ -346,7 +356,6 @@ export function ChatInterface() {
   };
 
   const handleClearAllSessions = async () => {
-
     try {
       await clearAllSessions.mutateAsync({
         clientId: SessionManager.getSessionId(),
@@ -354,14 +363,14 @@ export function ChatInterface() {
 
       // Clear local storage session ID
       SessionManager.clearSession();
-      
+
       // Reset all local state
       setSessions([]);
       setCurrentSession(null);
-      
+
       // Create a new session
       await handleNewSession();
-      
+
       toast.success("All sessions cleared successfully");
     } catch (error) {
       console.error("Failed to clear all sessions:", error);
@@ -371,8 +380,8 @@ export function ChatInterface() {
 
   // Simple title generation function
   const generateSessionTitle = (content: string): string => {
-    const words = content.split(' ').slice(0, 6).join(' ');
-    return words.length > 30 ? words.substring(0, 30) + '...' : words;
+    const words = content.split(" ").slice(0, 6).join(" ");
+    return words.length > 30 ? words.substring(0, 30) + "..." : words;
   };
 
   // Show loading state while initializing
@@ -439,50 +448,11 @@ export function ChatInterface() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Header */}
-        <motion.header
-          initial={{ opacity: 0, y: -20 }}
-          animate={{
-            opacity: 1,
-            y: showMobileHeader ? 0 : -100,
-          }}
-          transition={{ duration: 0.3 }}
-          className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border p-3 md:p-4 shadow-sm"
-        >
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="md:hidden hover:bg-accent"
-              >
-                <Menu className="w-4 h-4" />
-              </Button>
-
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-r from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
-                  <Brain className="w-4 h-4 md:w-5 md:h-5 text-primary-foreground" />
-                </div>
-                <div>
-                  <h1 className="text-lg md:text-xl font-bold text-foreground">
-                    AI Career Counselor
-                  </h1>
-                  <p className="text-xs md:text-sm text-muted-foreground">
-                    {currentSession?.title || "Your personal career assistant"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
-                <Sparkles className="w-4 h-4" />
-                <span>Always here to help</span>
-              </div>
-              <ThemeToggle />
-            </div>
-          </div>
-        </motion.header>
+        <Header
+          currentSession={currentSession}
+          isCollapsed={isSidebarCollapsed}
+          toggleSidebar={setIsSidebarCollapsed}
+        />
 
         {/* Messages Container */}
         <div className="flex-1 flex flex-col min-h-0">
