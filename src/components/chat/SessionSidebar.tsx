@@ -33,7 +33,8 @@ import {
   Check,
   X,
   BrushCleaning,
-  TriangleAlert
+  TriangleAlert,
+  LoaderCircle
 } from 'lucide-react';
 import { ChatSessionData } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,7 @@ interface SessionSidebarProps {
   onSelectSession: (sessionId: string) => void;
   onNewSession: () => void;
   onDeleteSession?: (sessionId: string) => void;
+  isDeleting: boolean;
   onRenameSession?: (sessionId: string, newTitle: string) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -57,6 +59,7 @@ export function SessionSidebar({
   onSelectSession, 
   onNewSession,
   onDeleteSession,
+  isDeleting,
   onRenameSession,
   isCollapsed = false,
   onToggleCollapse,
@@ -529,8 +532,9 @@ export function SessionSidebar({
             <AlertDialogAction
               onClick={() => sessionToDelete && handleDeleteSession(sessionToDelete)}
               className="bg-destructive text-primary-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
             >
-              Delete Session
+              {isDeleting ? <LoaderCircle className='animate-spin' /> : "Delete Session"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

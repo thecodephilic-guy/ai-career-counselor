@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import LoadingState from "./LoadingState";
 import Header from "./Header";
 import { ChatWindow } from "./ChatWindow";
 import { ChatInput } from "./ChatInput";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatMessage, ChatSessionData } from "@/lib/types";
 import { SessionManager } from "@/lib/session";
-import { Brain } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useTRPC } from "@/trpc/client";
@@ -23,6 +23,7 @@ export function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [deletingSession, setDeletingSession] = useState<boolean>(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -297,6 +298,7 @@ export function ChatInterface() {
   };
 
   const handleDeleteSession = async (sessionId: string) => {
+    setDeletingSession(true);
     try {
       const sessionToDelete = sessions.find((s) => s.id === sessionId);
       if (!sessionToDelete) return;
@@ -321,6 +323,8 @@ export function ChatInterface() {
     } catch (error) {
       console.error("Failed to delete session:", error);
       toast.error("Failed to delete session");
+    } finally{
+      setDeletingSession(false);
     }
   };
 
@@ -383,20 +387,7 @@ export function ChatInterface() {
   // Show loading state while initializing
   if (!isInitialized) {
     return (
-      <div className="h-screen flex bg-background items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center"
-        >
-          <div className="w-16 h-16 rounded-full bg-gradient-to-r from-primary to-primary/80 mx-auto mb-4 flex items-center justify-center shadow-lg shadow-primary/25 animate-pulse">
-            <Brain className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <p className="text-muted-foreground">
-            Initializing AI Career Counselor...
-          </p>
-        </motion.div>
-      </div>
+      <LoadingState />
     );
   }
 
@@ -434,6 +425,7 @@ export function ChatInterface() {
           onSelectSession={handleSelectSession}
           onNewSession={handleNewSession}
           onDeleteSession={handleDeleteSession}
+          isDeleting={deletingSession}
           onRenameSession={handleRenameSession}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
