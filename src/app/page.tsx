@@ -16,10 +16,9 @@ import { useMutation, useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 export default function Home() {
+  
   const [sessions, setSessions] = useState<ChatSessionData[]>([]);
-  const [currentSession, setCurrentSession] = useState<ChatSessionData | null>(
-    null
-  );
+  const [currentSession, setCurrentSession] = useState<ChatSessionData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
