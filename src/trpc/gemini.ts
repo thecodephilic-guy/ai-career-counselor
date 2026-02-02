@@ -35,7 +35,7 @@ Remember: Users want clear next steps, not essays. Be the career advisor who giv
 
 // Initial persistent chat session with "system" prompt
 const chat = ai.chats.create({
-  model: "gemini-2.0-flash-exp",
+  model: "gemini-3-flash-preview",
   history: [
     {
       role: "user",
